@@ -24,6 +24,8 @@ pub struct ChapterInfo {
     pub order: f64,
     /// 漫画的连载状态
     pub comic_status: ComicStatus,
+    /// 章节类型: 0-话, 1-卷, 2-番外
+    pub chapter_type: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_downloaded: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

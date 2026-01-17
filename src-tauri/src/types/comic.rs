@@ -382,6 +382,7 @@ impl ComicDetail {
                     group_size: chapter.count,
                     order: chapter.ordered as f64 / 10.0,
                     comic_status,
+                    chapter_type: chapter.type_field,
                     is_downloaded: None,
                     chapter_download_dir: None,
                 })

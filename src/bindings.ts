@@ -242,7 +242,11 @@ order: number;
 /**
  * 漫画的连载状态
  */
-comicStatus: ComicStatus; isDownloaded?: boolean | null; chapterDownloadDir?: string | null }
+comicStatus: ComicStatus; 
+/**
+ * 章节类型: 0-话, 1-卷, 2-番外
+ */
+chapterType: number; isDownloaded?: boolean | null; chapterDownloadDir?: string | null }
 export type Comic = { is_banned: boolean; is_lock: boolean; is_login: boolean; is_mobile_bind: boolean; is_vip: boolean; comic: ComicDetail; popular: number; groups: { [key in string]: Group }; isDownloaded?: boolean | null; comicDownloadDir?: string | null }
 export type ComicDetail = { uuid: string; b_404: boolean; b_hidden: boolean; ban: number; ban_ip: boolean | null; name: string; alias: string | null; path_word: string; close_comment: boolean; close_roast: boolean; free_type: LabeledValue; restrict: LabeledValue; reclass: LabeledValue; seo_baidu: string | null; region: LabeledValue; status: LabeledValue; author: Author[]; theme: Theme[]; brief: string; datetime_updated: string; cover: string; last_chapter: LastChapter; popular: number; 
 /**

@@ -16,12 +16,20 @@ const message = useMessage()
 
 // 当前tab的分组路径
 const currentGroupPath = ref<string>('default')
-// 当前tab的分组
+// 当前tab的分组, 加上了filtering
 const currentGroup = computed<ChapterInfoWithState[] | undefined>(() =>
-  store.pickedComic?.comic.groups[currentGroupPath.value].map((chapter) => {
-    const progressData = store.progresses.get(chapter.chapterUuid)
-    return { ...chapter, state: progressData?.state ?? 'Idle' }
-  }),
+  store.pickedComic?.comic.groups[currentGroupPath.value]
+    .filter((chapter) => {
+      if (currentFilter.value === 'all') return true
+      if (currentFilter.value === 'serial') return chapter.chapterType === 1
+      if (currentFilter.value === 'volume') return chapter.chapterType === 2
+      if (currentFilter.value === 'extra') return chapter.chapterType === 3
+      return true
+    })
+    .map((chapter) => {
+      const progressData = store.progresses.get(chapter.chapterUuid)
+      return { ...chapter, state: progressData?.state ?? 'Idle' }
+    }),
 )
 // 按章节数排序的分组
 const sortedGroups = computed<[string, ChapterInfoWithState[]][] | undefined>(() => {
@@ -29,16 +37,31 @@ const sortedGroups = computed<[string, ChapterInfoWithState[]][] | undefined>(()
     return undefined
   }
 
-  return Object.entries(store.pickedComic.comic.groups)
-    .map(([groupPath, chapters]): [string, ChapterInfoWithState[]] => [
-      groupPath,
-      chapters.map((chapter) => {
+  const groups = Object.entries(store.pickedComic.comic.groups)
+
+  // Sort groups by original length (descending) to keep tabs stable
+  groups.sort((a, b) => b[1].length - a[1].length)
+
+  return groups.map(([groupPath, chapters]): [string, ChapterInfoWithState[]] => [
+    groupPath,
+    chapters
+      .filter((chapter) => {
+        if (currentFilter.value === 'all') return true
+        if (currentFilter.value === 'serial') return chapter.chapterType === 1
+        if (currentFilter.value === 'volume') return chapter.chapterType === 2
+        if (currentFilter.value === 'extra') return chapter.chapterType === 3
+        return true
+      })
+      .map((chapter) => {
         const progressData = store.progresses.get(chapter.chapterUuid)
-        return { ...chapter, state: progressData?.state ?? 'Idle' }
-      }),
-    ])
-    .sort((a, b) => b[1].length - a[1].length)
+        return { ...chapter, state: (progressData?.state ?? 'Idle') as State }
+      })
+      // Sort chapters by order (ascending)
+      .sort((a, b) => a.order - b.order),
+  ])
 })
+
+const currentFilter = ref<'all' | 'serial' | 'volume' | 'extra'>('all')
 
 const { dropdownX, dropdownY, dropdownShowing, dropdownOptions, showDropdown } = useDropdown()
 const { selectionAreaRef, checkedIds, selectedIds, unselectAll, updateSelectedIds } = useSelectionArea()
@@ -250,6 +273,14 @@ function isDownloading(state: State) {
       左键拖动进行框选，右键打开菜单
       <n-button class="ml-auto" size="small" @click="reloadPickedComic">刷新</n-button>
       <n-button size="small" type="primary" @click="downloadChapters">下载勾选章节</n-button>
+    </div>
+    <div v-if="store.pickedComic !== undefined" class="flex items-center px-2 pb-2 gap-2">
+      <n-radio-group v-model:value="currentFilter" size="small">
+        <n-radio-button value="all">全部</n-radio-button>
+        <n-radio-button value="serial">话</n-radio-button>
+        <n-radio-button value="volume">卷</n-radio-button>
+        <n-radio-button value="extra">番外</n-radio-button>
+      </n-radio-group>
     </div>
     <n-empty v-if="store.pickedComic === undefined" description="请先选择漫画(漫画搜索、漫画收藏、本地库存)" />
     <n-tabs v-else class="flex-1 overflow-auto" v-model:value="currentGroupPath" type="line" size="small" animated>
