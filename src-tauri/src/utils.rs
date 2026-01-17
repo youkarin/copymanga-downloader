@@ -34,14 +34,23 @@ pub fn get_dimensions(img_data: &[u8]) -> anyhow::Result<(u32, u32)> {
     Ok(dimensions)
 }
 
-pub fn create_path_word_to_dir_map(app: &AppHandle) -> anyhow::Result<HashMap<String, PathBuf>> {
-    let mut path_word_to_dir_map: HashMap<String, PathBuf> = HashMap::new();
+pub fn create_path_word_to_dir_map(app: &AppHandle) -> anyhow::Result<HashMap<String, Vec<PathBuf>>> {
+    let mut path_word_to_dir_map: HashMap<String, Vec<PathBuf>> = HashMap::new();
     let download_dir = app.get_config().read().download_dir.clone();
-    if !download_dir.exists() {
-        return Ok(path_word_to_dir_map);
+    
+    // 基础下载目录。因为现在分类文件夹是在漫画文件夹下面的，所以只需要扫描基础下载目录即可
+    if download_dir.exists() {
+        collect_comic_dirs(&download_dir, &mut path_word_to_dir_map)?;
     }
 
-    for entry in WalkDir::new(&download_dir)
+    Ok(path_word_to_dir_map)
+}
+
+fn collect_comic_dirs(
+    root_dir: &std::path::Path,
+    map: &mut HashMap<String, Vec<PathBuf>>,
+) -> anyhow::Result<()> {
+    for entry in WalkDir::new(root_dir)
         .into_iter()
         .filter_map(Result::ok)
     {
@@ -65,12 +74,9 @@ pub fn create_path_word_to_dir_map(app: &AppHandle) -> anyhow::Result<HashMap<St
             .parent()
             .context(format!("`{}`没有父目录", path.display()))?;
 
-        path_word_to_dir_map
-            .entry(path_word)
-            .or_insert(parent.to_path_buf());
+        map.entry(path_word).or_default().push(parent.to_path_buf());
     }
-
-    Ok(path_word_to_dir_map)
+    Ok(())
 }
 
 pub async fn get_comic(app: AppHandle, comic_path_word: &str) -> anyhow::Result<Comic> {

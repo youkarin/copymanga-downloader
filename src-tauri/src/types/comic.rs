@@ -74,10 +74,13 @@ impl Comic {
             utils::create_path_word_to_dir_map(app).context("创建漫画路径词到下载目录映射失败")?;
 
         // TODO: 这是为了兼容v0.10.2及之前的版本，后续需要移除，计划在v0.12.0之后移除
-        if let Some(comic_download_dir) = path_word_to_dir_map.get(&comic.comic.path_word) {
-            comic
-                .create_chapter_metadata_for_old_version(comic_download_dir)
-                .context("为旧版本创建章节元数据失败")?;
+        // TODO: 这是为了兼容v0.10.2及之前的版本，后续需要移除，计划在v0.12.0之后移除
+        if let Some(comic_download_dirs) = path_word_to_dir_map.get(&comic.comic.path_word) {
+            for comic_download_dir in comic_download_dirs {
+                comic
+                    .create_chapter_metadata_for_old_version(comic_download_dir)
+                    .context("为旧版本创建章节元数据失败")?;
+            }
         }
 
         comic
@@ -106,12 +109,13 @@ impl Comic {
             .create_chapter_metadata_for_old_version(&comic_download_dir)
             .context("为旧版本创建章节元数据失败")?;
 
-        comic.comic_download_dir = Some(comic_download_dir);
+        comic.comic_download_dir = Some(comic_download_dir.clone());
         comic.is_downloaded = Some(true);
 
         // 来自元数据的章节信息没有`chapter_download_dir`和`is_downloaded`字段，需要更新
+        // 来自元数据的章节信息没有`chapter_download_dir`和`is_downloaded`字段，需要更新
         comic
-            .update_chapter_infos_fields()
+            .update_chapter_infos_fields(&[comic_download_dir])
             .context("更新章节信息字段失败")?;
 
         Ok(comic)
@@ -119,77 +123,77 @@ impl Comic {
 
     pub fn update_fields(
         &mut self,
-        path_word_to_dir_map: &HashMap<String, PathBuf>,
+        path_word_to_dir_map: &HashMap<String, Vec<PathBuf>>,
     ) -> anyhow::Result<()> {
-        if let Some(comic_download_dir) = path_word_to_dir_map.get(&self.comic.path_word) {
-            self.comic_download_dir = Some(comic_download_dir.clone());
-            self.is_downloaded = Some(true);
+        if let Some(comic_download_dirs) = path_word_to_dir_map.get(&self.comic.path_word) {
+            if let Some(first_dir) = comic_download_dirs.first() {
+                self.comic_download_dir = Some(first_dir.clone());
+                self.is_downloaded = Some(true);
+            }
 
-            self.update_chapter_infos_fields()
+            self.update_chapter_infos_fields(comic_download_dirs)
                 .context("更新章节信息字段失败")?;
         }
         Ok(())
     }
 
-    fn update_chapter_infos_fields(&mut self) -> anyhow::Result<()> {
-        let Some(comic_download_dir) = &self.comic_download_dir else {
-            return Err(anyhow!("`comic_download_dir`字段为`None`"));
-        };
-
-        if !comic_download_dir.exists() {
-            return Ok(());
-        }
-
-        for entry in WalkDir::new(comic_download_dir)
-            .into_iter()
-            .filter_map(Result::ok)
-        {
-            if !entry.is_chapter_metadata() {
+    fn update_chapter_infos_fields(&mut self, comic_download_dirs: &[PathBuf]) -> anyhow::Result<()> {
+        for comic_download_dir in comic_download_dirs {
+            if !comic_download_dir.exists() {
                 continue;
             }
 
-            let metadata_path = entry.path();
-
-            let metadata_str = std::fs::read_to_string(metadata_path)
-                .context(format!("读取`{}`失败", metadata_path.display()))?;
-
-            let chapter_json: serde_json::Value =
-                serde_json::from_str(&metadata_str).context(format!(
-                    "将`{}`反序列化为serde_json::Value失败",
-                    metadata_path.display()
-                ))?;
-
-            let chapter_uuid = chapter_json
-                .get("chapterUuid")
-                .and_then(|uuid| uuid.as_str())
-                .context(format!(
-                    "`{}`没有`chapterUuid`字段",
-                    metadata_path.display()
-                ))?
-                .to_string();
-
-            let group_path_word = chapter_json
-                .get("groupPathWord")
-                .and_then(|word| word.as_str())
-                .context(format!(
-                    "`{}`没有`groupPathWord`字段",
-                    metadata_path.display()
-                ))?
-                .to_string();
-
-            let Some(group) = self.comic.groups.get_mut(&group_path_word) else {
-                continue;
-            };
-
-            if let Some(chapter_info) = group
-                .iter_mut()
-                .find(|chapter| chapter.chapter_uuid == chapter_uuid)
+            for entry in WalkDir::new(comic_download_dir)
+                .into_iter()
+                .filter_map(Result::ok)
             {
-                let parent = metadata_path
-                    .parent()
-                    .context(format!("`{}`没有父目录", metadata_path.display()))?;
-                chapter_info.chapter_download_dir = Some(parent.to_path_buf());
-                chapter_info.is_downloaded = Some(true);
+                if !entry.is_chapter_metadata() {
+                    continue;
+                }
+
+                let metadata_path = entry.path();
+
+                let metadata_str = std::fs::read_to_string(metadata_path)
+                    .context(format!("读取`{}`失败", metadata_path.display()))?;
+
+                let chapter_json: serde_json::Value =
+                    serde_json::from_str(&metadata_str).context(format!(
+                        "将`{}`反序列化为serde_json::Value失败",
+                        metadata_path.display()
+                    ))?;
+
+                let chapter_uuid = chapter_json
+                    .get("chapterUuid")
+                    .and_then(|uuid| uuid.as_str())
+                    .context(format!(
+                        "`{}`没有`chapterUuid`字段",
+                        metadata_path.display()
+                    ))?
+                    .to_string();
+
+                let group_path_word = chapter_json
+                    .get("groupPathWord")
+                    .and_then(|word| word.as_str())
+                    .context(format!(
+                        "`{}`没有`groupPathWord`字段",
+                        metadata_path.display()
+                    ))?
+                    .to_string();
+
+                let Some(group) = self.comic.groups.get_mut(&group_path_word) else {
+                    continue;
+                };
+
+                if let Some(chapter_info) = group
+                    .iter_mut()
+                    .find(|chapter| chapter.chapter_uuid == chapter_uuid)
+                {
+                    let parent = metadata_path
+                        .parent()
+                        .context(format!("`{}`没有父目录", metadata_path.display()))?;
+                    chapter_info.chapter_download_dir = Some(parent.to_path_buf());
+                    chapter_info.is_downloaded = Some(true);
+                }
             }
         }
 

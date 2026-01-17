@@ -855,12 +855,33 @@ impl Comic {
         let comic_download_dir = Comic::get_comic_download_dir_by_fmt(app, &comic_dir_fmt_params)?;
         self.comic_download_dir = Some(comic_download_dir.clone());
 
+        let separate_chapter_type = app.get_config().read().separate_chapter_type;
+
         for chapter_info in &mut self
             .comic
             .groups
             .iter_mut()
             .flat_map(|(_, chapters)| chapters)
         {
+            let mut final_comic_download_dir = comic_download_dir.clone();
+            
+            // 如果开启了`separate_chapter_type`，则根据章节类型，追加对应的目录
+            // 新结构: 下载目录 / 漫画名 / 分组名(非默认) / {话|卷|番外}
+            if separate_chapter_type {
+                let type_dir_name = match chapter_info.chapter_type {
+                    1 => "话",
+                    2 => "卷",
+                    3 => "番外",
+                    _ => "",
+                };
+                if !type_dir_name.is_empty() {
+                    // 现在的结构变成: 漫画名 / 分组名 / {话|卷|番外} / 章节名
+                    final_comic_download_dir = comic_download_dir
+                        .join(&chapter_info.group_name)
+                        .join(type_dir_name);
+                }
+            }
+
             let chapter_dir_fmt_params = ChapterDirFmtParams {
                 comic_uuid: comic_uuid.clone(),
                 comic_path_word: comic_path_word.clone(),
@@ -872,11 +893,23 @@ impl Comic {
                 chapter_title: chapter_info.chapter_title.clone(),
                 order: chapter_info.order,
             };
+
+            let mut chapter_dir_fmt_override = None;
+            if separate_chapter_type {
+                 let mut chapter_dir_fmt = app.get_config().read().chapter_dir_fmt.clone();
+                 if chapter_dir_fmt.contains("{group_title}/") {
+                     chapter_dir_fmt_override = Some(chapter_dir_fmt.replace("{group_title}/", ""));
+                 } else if chapter_dir_fmt.contains("{group_title}\\") {
+                     chapter_dir_fmt_override = Some(chapter_dir_fmt.replace("{group_title}\\", ""));
+                 }
+            }
             let chapter_download_dir = ChapterInfo::get_chapter_download_dir_by_fmt(
                 app,
-                &comic_download_dir,
+                &final_comic_download_dir,
                 &chapter_dir_fmt_params,
-            )?;
+                chapter_dir_fmt_override,
+            )
+            .context("获取章节下载目录失败")?;
             chapter_info.chapter_download_dir = Some(chapter_download_dir);
         }
 
@@ -952,6 +985,7 @@ impl ChapterInfo {
         app: &AppHandle,
         comic_download_dir: &Path,
         fmt_params: &ChapterDirFmtParams,
+        fmt_override: Option<String>,
     ) -> anyhow::Result<PathBuf> {
         use strfmt::strfmt;
 
@@ -973,7 +1007,7 @@ impl ChapterInfo {
                 (key, value)
             })
             .collect();
-        let mut chapter_dir_fmt = app.get_config().read().chapter_dir_fmt.clone();
+        let mut chapter_dir_fmt = fmt_override.unwrap_or_else(|| app.get_config().read().chapter_dir_fmt.clone());
         Self::preprocess_order_placeholder(&mut chapter_dir_fmt, &vars)
             .context("预处理`order`占位符失败")?;
 

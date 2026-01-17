@@ -137,6 +137,19 @@ async function showConfigInFileManager() {
           <n-checkbox class="w-fit" v-model:checked="store.config.enableMergePdf">创建完成后是否自动合并</n-checkbox>
         </div>
 
+        <div class="flex gap-1 items-center mt-2">
+            <span class="font-bold">是否区分话.卷,番外</span>
+            <n-tooltip trigger="hover">
+                <template #trigger>
+                    <n-icon size="18" class="cursor-help">
+                        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10s10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8s8 3.59 8 8s-3.59 8-8 8zM11 9h2V7h-2v2z" fill="currentColor"></path></svg>
+                    </n-icon>
+                </template>
+                <div>开启后,下载会按照类别区分开</div> 
+            </n-tooltip>
+             <n-switch v-model:value="store.config.separateChapterType" size="small" />
+        </div>
+
         <span class="font-bold mt-2">漫画目录格式</span>
         <n-tooltip placement="top" trigger="hover">
           <div>

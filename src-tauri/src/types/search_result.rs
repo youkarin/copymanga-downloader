@@ -77,7 +77,7 @@ pub struct ComicInSearch {
 impl ComicInSearch {
     pub fn from_resp_data(
         resp_data: &ComicInSearchRespData,
-        path_word_to_dir_map: &HashMap<String, PathBuf>,
+        path_word_to_dir_map: &HashMap<String, Vec<PathBuf>>,
     ) -> Self {
         let mut comic = ComicInSearch {
             name: resp_data.name.clone(),
@@ -96,10 +96,12 @@ impl ComicInSearch {
         comic
     }
 
-    pub fn update_fields(&mut self, path_word_to_dir_map: &HashMap<String, PathBuf>) {
-        if let Some(comic_download_dir) = path_word_to_dir_map.get(&self.path_word) {
-            self.comic_download_dir = comic_download_dir.clone();
-            self.is_downloaded = true;
+    pub fn update_fields(&mut self, path_word_to_dir_map: &HashMap<String, Vec<PathBuf>>) {
+        if let Some(comic_download_dirs) = path_word_to_dir_map.get(&self.path_word) {
+            if let Some(first_dir) = comic_download_dirs.first() {
+                self.comic_download_dir = first_dir.clone();
+                self.is_downloaded = true;
+            }
         }
     }
 }

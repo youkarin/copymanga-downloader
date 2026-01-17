@@ -27,6 +27,8 @@ pub struct Config {
     pub chapter_dir_fmt: String,
     pub create_pdf_concurrency: usize,
     pub enable_merge_pdf: bool,
+    #[serde(default)]
+    pub separate_chapter_type: bool,
 }
 
 impl Config {
@@ -102,6 +104,7 @@ impl Config {
             chapter_dir_fmt: "{group_title}/{order} {chapter_title}".to_string(),
             create_pdf_concurrency: cpu_core_num,
             enable_merge_pdf: true,
+            separate_chapter_type: false,
         }
     }
 

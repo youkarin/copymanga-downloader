@@ -93,7 +93,7 @@ pub struct ComicInFavorite {
 impl ComicInFavorite {
     pub fn from_resp_data(
         resp_data: &ComicInGetFavoriteRespData,
-        path_word_to_dir_map: &HashMap<String, PathBuf>,
+        path_word_to_dir_map: &HashMap<String, Vec<PathBuf>>,
     ) -> ComicInFavorite {
         let mut comic = ComicInFavorite {
             uuid: resp_data.uuid.clone(),
@@ -116,10 +116,12 @@ impl ComicInFavorite {
         comic
     }
 
-    pub fn update_fields(&mut self, path_word_to_dir_map: &HashMap<String, PathBuf>) {
-        if let Some(comic_download_dir) = path_word_to_dir_map.get(&self.path_word) {
-            self.comic_download_dir = comic_download_dir.clone();
-            self.is_downloaded = true;
+    pub fn update_fields(&mut self, path_word_to_dir_map: &HashMap<String, Vec<PathBuf>>) {
+        if let Some(comic_download_dirs) = path_word_to_dir_map.get(&self.path_word) {
+            if let Some(first_dir) = comic_download_dirs.first() {
+                self.comic_download_dir = first_dir.clone();
+                self.is_downloaded = true;
+            }
         }
     }
 }

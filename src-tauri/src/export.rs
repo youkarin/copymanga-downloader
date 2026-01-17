@@ -89,6 +89,8 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
         .context(format!("`{comic_title}` 获取导出目录失败"))?;
     let cbz_export_dir = comic_export_dir.join(extension);
 
+    let separate_chapter_type = app.get_config().read().separate_chapter_type;
+
     // 并发处理
     let downloaded_chapters = downloaded_chapters.into_par_iter();
     downloaded_chapters.try_for_each(|chapter_info| -> anyhow::Result<()> {
@@ -119,7 +121,39 @@ pub fn cbz(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
             "{err_prefix} `{}`没有父目录",
             chapter_relative_dir.display()
         ))?;
-        let chapter_export_dir = cbz_export_dir.join(chapter_relative_dir_parent);
+
+        let mut chapter_export_dir = comic_export_dir.clone();
+
+        if separate_chapter_type {
+            let type_dir_name = match chapter_info.chapter_type {
+                1 => "话",
+                2 => "卷",
+                3 => "番外",
+                _ => "",
+            };
+            if !type_dir_name.is_empty() {
+                chapter_export_dir = chapter_export_dir.join(&chapter_info.group_name).join(type_dir_name);
+            }
+        }
+        
+        chapter_export_dir = chapter_export_dir.join(extension);
+        
+        // 如果相对路径中已经包含类型文件夹（由于之前下载时已经分类），
+        // 那么在chapter_relative_dir_parent中可能会包含这个类型前缀。
+        // 我们需要剥离它，因为上面已经根据配置添加过了
+        let mut final_relative_parent = chapter_relative_dir_parent.to_path_buf();
+        // 剥离分组名
+        if let Ok(stripped) = final_relative_parent.strip_prefix(&chapter_info.group_name) {
+            final_relative_parent = stripped.to_path_buf();
+        }
+        // 剥离章节类型
+        for t in ["话", "卷", "番外"] {
+            if let Ok(stripped) = final_relative_parent.strip_prefix(t) {
+                final_relative_parent = stripped.to_path_buf();
+                break;
+            }
+        }
+        chapter_export_dir = chapter_export_dir.join(final_relative_parent);
         // 保证导出目录存在
         std::fs::create_dir_all(&chapter_export_dir).context(format!(
             "{err_prefix} 创建目录`{}`失败",
@@ -259,6 +293,7 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
     // 章节和他们对应的pdf路径
     let chapter_and_pdf_path_pairs = Mutex::new(Vec::new());
     // 并发处理
+    let separate_chapter_type = app.get_config().read().separate_chapter_type;
     let create_pdf_concurrency = app.get_config().read().create_pdf_concurrency;
     let thread_pool = rayon::ThreadPoolBuilder::new()
         .num_threads(create_pdf_concurrency)
@@ -290,7 +325,36 @@ pub fn pdf(app: &AppHandle, comic: &Comic) -> anyhow::Result<()> {
                 "{err_prefix} `{}`没有父目录",
                 chapter_relative_dir.display()
             ))?;
-            let chapter_export_dir = pdf_export_dir.join(chapter_relative_dir_parent);
+
+            let mut chapter_export_dir = comic_export_dir.clone();
+
+            if separate_chapter_type {
+                let type_dir_name = match chapter_info.chapter_type {
+                    1 => "话",
+                    2 => "卷",
+                    3 => "番外",
+                    _ => "",
+                };
+                if !type_dir_name.is_empty() {
+                    chapter_export_dir = chapter_export_dir.join(&chapter_info.group_name).join(type_dir_name);
+                }
+            }
+            
+            chapter_export_dir = chapter_export_dir.join(extension);
+            
+            let mut final_relative_parent = chapter_relative_dir_parent.to_path_buf();
+            // 剥离分组名
+            if let Ok(stripped) = final_relative_parent.strip_prefix(&chapter_info.group_name) {
+                final_relative_parent = stripped.to_path_buf();
+            }
+            // 剥离章节类型
+            for t in ["话", "卷", "番外"] {
+                if let Ok(stripped) = final_relative_parent.strip_prefix(t) {
+                    final_relative_parent = stripped.to_path_buf();
+                    break;
+                }
+            }
+            chapter_export_dir = chapter_export_dir.join(final_relative_parent);
             // 保证导出目录存在
             std::fs::create_dir_all(&chapter_export_dir).context(format!(
                 "{err_prefix} 创建目录`{}`失败",
@@ -543,7 +607,7 @@ fn merge_pdf_file(chapter_pdf_paths: Vec<PathBuf>, pdf_path: &Path) -> anyhow::R
                 };
             }
             // 忽略这些对象
-            b"Catalog" | b"Pages" | b"Outlines" | b"Outline" => {}
+            val if val == b"Catalog" || val == b"Pages" || val == b"Outlines" || val == b"Outline" => {}
             // 将所有其他对象添加到doc中
             _ => {
                 doc.objects.insert(object_id, object);
